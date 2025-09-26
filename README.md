@@ -6,7 +6,7 @@ This project is a solution to the technical challenge provided by NTD.
 
 ## Features
 
-This project is divided in 3 modules to allow responsability segregation, It have an ingestion app that ingest all the data deltas from https://swapi-graphql.netlify.app/graphql GraphQL API every 5 minutes, this is achieved thanks to a celery worker scheduler, once it gets the data from the API it update or create a new record on the database (This is not available in the deployed version because it costed me addition money).
+This project is divided in 3 modules to allow responsability segregation, It have an ingestion app that ingest all the data deltas from https://swapi-graphql.netlify.app/graphql GraphQL API every 5 minutes, this is achieved thanks to a celery worker scheduler, once it gets the data from the API it update or create a new record on the database (This is not available in the deployed version because it costed me additional fee).
 
 In the other side, we have the rest_api app that creates the RESTful API to consume the data from the database, it is a CRUD API. These are the additional feature included in this API, it have **CORS validation** to be able to be consumed from a frontend, it is **API Key based authentication** which the current API Key value for test purposes is: **aAKGsQ7nenYEA5SoiKhhj7HMzYC83rpyf8qEq0Bs**, it have a **pagination** to not overload API responses, and it have a **Swagger** in the path **/api/docs/** where you can test out the API adding the API Key mentioned.
 
