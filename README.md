@@ -36,8 +36,7 @@ Then, we have Core app where is all the cross-app models, in order to make easie
     POSTGRES_PORT
     POSTGRES_SSLMODE
 
-    CELERY_BROKER_URL
-    CELERY_RESULT_BACKEND
+    REDIS_URL
     ``` 
 
 ## Test API
