@@ -1,19 +1,28 @@
+# Imagen base
 FROM python:3.11-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    gcc libpq-dev && \
-    rm -rf /var/lib/apt/lists/*
+# Evitar prompts
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# Create and set working directory
+# Crear directorio
 WORKDIR /app
 
-# Install app dependencies
+# Instalar dependencias del sistema
+RUN apt-get update && apt-get install -y \
+    gcc libpq-dev build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Instalar dependencias Python
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy project files
+# Copiar código
 COPY . .
 
-# Expose the port the app runs on
+# Exponer puerto
 EXPOSE 8000
+
+# Usar Gunicorn en producción
+CMD ["gunicorn", "technical_challenge_ntd.wsgi:application", "--bind", "0.0.0.0:8000"]
+
