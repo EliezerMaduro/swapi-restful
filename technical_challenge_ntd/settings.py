@@ -13,11 +13,12 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 from pathlib import Path
 import environ
 
-env = environ.Env()
-environ.Env.read_env()
-
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
+# Base del proyecto
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Inicializar entorno
+env = environ.Env()
+environ.Env.read_env(BASE_DIR / ".env")  # ruta absoluta al .env
 
 
 # Quick-start development settings - unsuitable for production
@@ -45,21 +46,28 @@ INSTALLED_APPS = [
     'apps.ingestion.apps.IngestionConfig',
     'apps.rest_api.apps.ApiConfig',
     'rest_framework',
-    'corsheaders'
+    'rest_framework.authtoken',
+    'corsheaders',
+    'drf_spectacular',
+    'django_celery_beat',
+    'django_celery_results',
 ]
-
-CORS_ALLOW_ALL_ORIGINS = True
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
-    'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'corsheaders.middleware.CorsMiddleware'
 ]
+
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_HEADERS = ["*"]
+CORS_ALLOW_METHODS = ["*"]
+
 
 ROOT_URLCONF = 'technical_challenge_ntd.urls'
 
@@ -85,14 +93,15 @@ WSGI_APPLICATION = 'technical_challenge_ntd.wsgi.application'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
 DATABASES = {
-    'default': {
-            'ENGINE': 'django.db.backends.postgresql',
-            'NAME': env('POSTGRES_DB', default='ntd_technical_challenge'),
-            'USER': env('POSTGRES_USER', default='ingestion_user'),
-            'PASSWORD': env('POSTGRES_PASSWORD', default='ingestion_password'),
-            'HOST': env('POSTGRES_HOST', default='localhost'),  # Usa 'localhost' para conexión local
-            'PORT': env('POSTGRES_PORT', default='5432'),
-        }
+    "default": {
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": env("POSTGRES_DB"),
+        "USER": env("POSTGRES_USER"),
+        "PASSWORD": env("POSTGRES_PASSWORD"),
+        "HOST": env("POSTGRES_HOST"),
+        "PORT": env("POSTGRES_PORT"),
+        "OPTIONS": {"sslmode": env("POSTGRES_SSLMODE", default="require")},
+    }
 }
 
 
@@ -126,6 +135,8 @@ USE_I18N = True
 
 USE_TZ = True
 
+APPEND_SLASH=False
+
 
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
@@ -138,40 +149,67 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
-    # Permisos por defecto
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.IsAuthenticated',  # Requiere autenticación para endpoints
-        # Alternativa: 'rest_framework.permissions.AllowAny' para acceso público
-    ],
-    # Autenticación por defecto
     'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',  # Para admin y pruebas
-        'rest_framework.authentication.TokenAuthentication',   # Para APIs (recomendado)
-        # Opcional: 'rest_framework_simplejwt.authentication.JWTAuthentication' si usas JWT
+        'apps.rest_api.auth.ApiKeyAuthentication',
     ],
-    # Paginación (opcional, para listas grandes)
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 100,  # Número de ítems por página
-    # Formato de respuestas (opcional)
+    'DEFAULT_PERMISSION_CLASSES': [
+        'apps.rest_api.permissions.AllowAnyAuthenticated',
+    ],
+    'DEFAULT_PAGINATION_CLASS': 'apps.rest_api.pagination.CustomPagination',
+    'PAGE_SIZE': 10,
     'DEFAULT_RENDERER_CLASSES': [
         'rest_framework.renderers.JSONRenderer',
-        'rest_framework.renderers.BrowsableAPIRenderer',  # Interfaz web de DRF (útil en desarrollo)
+        'rest_framework.renderers.BrowsableAPIRenderer', 
     ],
-    # Formato de parsers (para manejar datos de entrada)
     'DEFAULT_PARSER_CLASSES': [
         'rest_framework.parsers.JSONParser',
         'rest_framework.parsers.FormParser',
         'rest_framework.parsers.MultiPartParser',
     ],
-    # Esquema para documentación de API (opcional, para Swagger/OpenAPI)
-    'DEFAULT_SCHEMA_CLASS': 'rest_framework.schemas.openapi.AutoSchema',
-    # Throttling (límite de peticiones, opcional)
+    # API documentation with drf-spectacular
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
+    # Throttling
     'DEFAULT_THROTTLE_CLASSES': [
         'rest_framework.throttling.AnonRateThrottle',
         'rest_framework.throttling.UserRateThrottle',
     ],
     'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/day',  # Límite para usuarios no autenticados
-        'user': '1000/day',  # Límite para autenticados
+        'anon': '100/day',
+        'user': '1000/day',
     },
 }
+
+# drf-spectacular Configuration
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'SWAPI API',
+    'DESCRIPTION': 'REST API',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': True,
+    'SWAGGER_UI_SETTINGS': {
+        'deepLinking': True,
+        'persistAuthorization': True,
+    },
+    'SERVE_PERMISSIONS': [
+        'rest_framework.permissions.AllowAny', 
+    ],
+    'SERVE_AUTHENTICATION': None,
+    "SECURITY": [{"ApiKeyAuth": []}],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "ApiKeyAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-API-Key"
+            }
+        }
+    },
+}
+
+# Celery Configuration
+CELERY_BROKER_URL = env("CELERY_BROKER_URL", default="redis://redis:6379/0")
+CELERY_RESULT_BACKEND = env("CELERY_RESULT_BACKEND", default="redis://redis:6379/1")
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'America/Bogota'  
+CELERY_BEAT_SCHEDULER = 'django_celery_beat.schedulers:DatabaseScheduler'
